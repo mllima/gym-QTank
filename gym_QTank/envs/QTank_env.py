@@ -2,7 +2,7 @@ import gym
 from gym import spaces, logger
 from gym.utils import seeding
 import numpy as np
-
+from gym.envs.classic_control import rendering
 
 class QTankEnv(gym.Env):
     metadata = {'render.modes': ['human']}
@@ -31,6 +31,7 @@ class QTankEnv(gym.Env):
         self.steps_beyond_done = None
 
         self.seed()
+        self.viewer = None
 
         self.info = {'method': 'Euler', 'step': self.dt}
 
@@ -92,10 +93,47 @@ class QTankEnv(gym.Env):
 
         return y, reward, done, self.info
 
-    '''
     def render(self, mode='human'):
-      ...
+
+        screen_width = 350
+        screen_height = 400
+        scale = screen_width/7
+
+        class Tank():
+            def __init__(self, x,y,dx,dy,viewer):
+                x,y,dx,dy = [z*scale for z in (x,y,dx,dy)]
+                self.x, self.y = x,y
+                
+                tank = rendering.PolyLine([(x,y),(x+dx,y),(x+dx,y+dy),(x,y+dy)],True)
+                viewer.add_geom(tank)
+                
+                level = rendering.FilledPolygon([(0,0),(dx,0),(dx,dy),(0,dy)])
+                self.trans = rendering.Transform()
+                level.add_attr(self.trans)
+                level.set_color(.5,.5,1.)
+                viewer.add_geom(level)                   
+            def setLevel(self,perc):
+                self.trans.set_scale(1,perc)
+                self.trans.set_translation(self.x, 1+self.y)
+
+        if self.viewer is None:
+            self.viewer = rendering.Viewer(screen_width, screen_height)
+            self.tanks = [Tank(*dim,self.viewer) for dim in ((1,2,2,2),(1,5,2,2),(4,2,2,2),(4,5,2,2),(0,0.5,7,1.0))] 
+
+            for poly in (((.5,1.5),(.5,7.33),(5,7.33),(5,7)),((6.5,1.5),(6.5,7.66),(2,7.66),(2,7)),((.5,4.5),(1.5,4.5),(1.5,4)),((6.5,4.5),(5.5,4.5),(5.5,4)),((2,2),(2,1.5)),((2,5),(2,4.5)),((5,2),(5,1.5)),((5,5),(5,4.5))):
+                poly = [[x*scale for x in point] for point in poly]
+                self.viewer.add_geom(rendering.PolyLine(poly,False))          
+
+
+        if self.state is None: return None
+
+        for tank,h in zip(self.tanks,self.state):
+            tank.setLevel(h/self.h_max)
+        self.tanks[4].setLevel(1-sum(self.state)/(4*self.h_max))
+
+        return self.viewer.render(return_rgb_array = mode=='rgb_array')
 
     def close(self):
-      ...
-    '''
+        if self.viewer:
+            self.viewer.close()
+            self.viewer = None
